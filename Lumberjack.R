@@ -20,7 +20,7 @@ tdy <- function(){
   format(Sys.time(), "%y.%m.%d")
 }
 
-mbDate_it <- function(x){
+date_it <- function(x){
   name <- paste0(tdy(), "_", x)
   return (name)
 }
