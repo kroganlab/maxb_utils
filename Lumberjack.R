@@ -1,41 +1,32 @@
 
+# Most Important Functions In this Script
+
+### ScriptNamedDir()             - returns a "_data" folder for .rmd files when called from within that .rmd
+### get_logs_dir()               - returns a "logs" folder for dumping any logged info you dont want cluttering your main directories, nests in the "_data" folder if available
+### log_source(<file to source>) - sources .R code and records the code in "logs" folder and relevant info in "00_sourced_Rcode_log.tsv" by default.
+###                                 Will source previously logged code with the same base filename if requested source code cannot be found. Records git commit.
+
 require(data.table)
 require(devtools)
 require(rstudioapi)
 require(RCurl)
 require(tools)
 
-# Basics copied from Ben
-today <- function(){
-  format(Sys.time(), "%Y_%m_%d")
-}
-
-DateFileName <- function(x){
-  name <-   paste0(today(), "_", x)
-  print (name)
-  return (name)
-}
+###
+##  Helper functions for getting the time and navigating filesystem
+###
 
 tdy <- function(){
   format(Sys.time(), "%y.%m.%d")
 }
 
-date_it <- function(x){
+mbDate_it <- function(x){
   name <- paste0(tdy(), "_", x)
   return (name)
 }
 
 moment <- function(){
   format(Sys.time(), "%y.%m.%d--%H.%M.%S")
-}
-
-moment_it <- function(x){
-  name <- paste0(moment(), "_", x)
-  return (name)
-}
-
-get_smpl <- function(x){
-  return( tools::file_path_sans_ext( basename( x ) ) )
 }
 
 ScriptName <- function(scriptName = NULL){
@@ -58,8 +49,6 @@ ScriptNamedDir <- function(scriptName = NULL){
   return(outDir)
 }
 
-# Basics for logging 
-
 get_logs_dir <- function(){
   # Check if there exists a _data folder with the same name as current script, 
   # return (and create if necessary) the logs folder inside <sript>_data or 
@@ -80,6 +69,23 @@ get_logs_dir <- function(){
   }
   return(logsFolder) 
 }
+
+get_source_log_file <- function(logFileName = "00_sourced_Rcode_log.tsv"){
+  logDir <- get_logs_dir()
+  sourcelogFile <- file.path(logDir, logFileName)
+  if (  !file.exists(sourcelogFile) ){
+    message ("Creating sourced R code log file in folder ", logDir)
+    headersOnly <- data.table::data.table("Date" = character(length = 0L), "Time" = character(length = 0L), 
+                                          "Source_Requested" = character(length = 0L), "Source_Used" = character(length = 0L), 
+                                          "Logged_As" = character(length = 0L), "Assc._Git_Commit" = character(length = 0L))
+    data.table::fwrite(x = headersOnly, file = sourcelogFile, sep = "\t")
+  }
+  return(sourcelogFile)
+}
+
+###
+##  Helpers for interacting w Git
+###
 
 get_git_commit_sha <- function(filepath = ".") {
   # Use 'git log' to get the last commit SHA for a specific file or the current directory
@@ -134,20 +140,11 @@ check_if_gitRemote_upToDate <- function(filepath = "."){
   return(F)
 }
 
-get_source_log_file <- function(logFileName = "00_sourced_Rcode_log.tsv"){
-  logDir <- get_logs_dir()
-  sourcelogFile <- file.path(logDir, logFileName)
-  if (  !file.exists(sourcelogFile) ){
-    message ("Creating sourced R code log file in folder ", logDir)
-    headersOnly <- data.table::data.table("Date" = character(length = 0L), "Time" = character(length = 0L), 
-                              "Source_Requested" = character(length = 0L), "Source_Used" = character(length = 0L), 
-                              "Logged_As" = character(length = 0L), "Assc._Git_Commit" = character(length = 0L))
-    data.table::fwrite(x = headersOnly, file = sourcelogFile, sep = "\t")
-  }
-  return(sourcelogFile)
-}
+###
+##  Function for logging source code
+###
 
-log_source <- function(sourceRequested){
+log_source <- function(sourceRequested, logFileName = "00_sourced_Rcode_log.tsv"){
   message(sprintf("Sourcing and Logging R Script:   %s   ", basename(sourceRequested)))
   sourceFile <- copy(sourceRequested)
   recentSource <- NULL
@@ -196,7 +193,7 @@ log_source <- function(sourceRequested){
   sourceInfo <- data.table::data.table("Date" = c(day), "Time" = c(timeOfDay), 
                            "Source_Requested" = c(sourceRequested), "Source_Used" = sourceFile,
                            "Logged_As" = c(loggedCodePath), "Assc._Git_Commit" = get_git_commit_hyperlink(sourceFile) )
-  data.table::fwrite(x = sourceInfo, file = get_source_log_file(), append = T, sep = "\t")
+  data.table::fwrite(x = sourceInfo, file = get_source_log_file(logFileName = logFileName), append = T, sep = "\t")
 
   # finalllyyyy source it!
   source(sourceFile)
