@@ -79,7 +79,7 @@ PlotQCBar <- function( msstatsTable, plotType = c("count","intensity"), colorsMa
   
 }
 
-PlotQcHeatmap <- function(mat, scale = "Log2 Intensities", showrn = F, csplit = F, title = "", 
+PlotQcHeatmap <- function(mat, scale = "Log2 Intensities", showrn = F, csplit = c(F), title = "", 
                           legendRange = colorRamp2(quantile(mat, probs = c(0.015, 0.5, 0.985),na.rm = T), c( "blue", "white", "red")), row_names_gp = gpar(fontfamily = face), face = "sans",
                           cluster_rows = rowClusterWithNA(mat)){
   
@@ -107,7 +107,7 @@ PlotQcHeatmap <- function(mat, scale = "Log2 Intensities", showrn = F, csplit = 
                     row_title = NULL,
                     show_row_names = showrn,
                     show_column_names = T,
-                    cluster_columns = T,
+                    cluster_columns = F,
                     column_names_rot = 75,
                     column_names_gp = gpar(fontfamily = face), row_names_gp = row_names_gp, column_title_gp = gpar(fontfamily = face),
                     raster_by_magick = T) 

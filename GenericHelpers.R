@@ -14,6 +14,9 @@ substrLeft <- function(string,start,stop = 0){
   return(substr(string, start, l+stop))
 }
 
+strReverse <- function(x){
+  sapply(lapply(strsplit(x, NULL), rev), paste, collapse="")}
+
 #' @param replace 2 column data frame/table with the recognition patterns in the first columns and replacements in the second column. 
 #' @param remove a character vector of strings to remove
 multiGsub <- function (characterVector, replace, remove = ""){
@@ -23,6 +26,14 @@ multiGsub <- function (characterVector, replace, remove = ""){
     characterVector <- ifelse(grepl(replace[x,1],characterVector), gsub(replace[x,1], replace[x,2],characterVector),characterVector)
   }
   return(characterVector)
+}
+
+multiGrepl <- function(patterns, v){
+  logi <- grepl(patterns[1],v)
+  for (i in patterns[2:length(patterns)]){
+    logi <- grepl(i,v) | logi
+  }
+  return(logi)
 }
 
 collapseVecPairwise <- function(vec, sep = "_"){
@@ -82,6 +93,19 @@ freadDirectory <- function(directory = ".", Names = NULL, recursive = T, pattern
     }
     
   }
+}
+
+library(parallel)
+availCoresForParallel  <- function(leaveFree = 0.66){
+  # Check how many times session memory can fit into avail memory, as a rule, leave 2/3 of available memory
+  gc()
+  sessMem <- sum(memory.profile())#(gc()[, 6] |> sum()) * 1000
+  availMem <- as.numeric(system("awk '/MemFree/ {print $2}' /proc/meminfo", intern=TRUE))
+  nCoresMem <- floor((availMem * (1-leaveFree) ) / sessMem)
+  
+  nCoresSys <- max(1L, round(detectCores()*0.8), na.rm = TRUE)
+  
+  return(min(nCoresSys, nCoresMem))
 }
 
 

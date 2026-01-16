@@ -1,0 +1,66 @@
+Source Data & Code
+----------------------------
+<div id="accordion-start"></div>
+
+```{r sourcedata, echo=FALSE, results='asis', warnings=FALSE}
+
+if(!exists(autodoc.skip.df)) {
+  autodoc.skip.df <- list()
+}
+
+#Generate the following table:
+for (i in ls(.GlobalEnv)) {
+  if(!i %in% autodoc.skip.df) {
+    itm <- tryCatch(get(i), error=function(e) NA )
+    if(typeof(itm)=="list") {
+      if(is.data.frame(itm)) {
+        cat(sprintf("### %s\n", i))
+        print(xtable(itm), type="html", include.rownames=FALSE, html.table.attributes=sprintf("class='exportable' id='%s'", i))
+      }
+    }
+  }
+}
+```
+### Source Code
+```{r allsource, echo=FALSE, results='asis', warning=FALSE, cache=FALSE}
+fns <- unique(c(compact(llply(.data=llply(.data=ls(all.names=TRUE), .fun=function(x) {a<-get(x); c(normalizePath(getSrcDirectory(a)),getSrcFilename(a))}), .fun=function(x) { if(length(x)>0) { x } } )), llply(names(sourced), function(x) c(normalizePath(dirname(x)), basename(x)))))
+
+for (itm in fns) {
+  cat(sprintf("#### %s\n", itm[2]))
+  cat("\n```{r eval=FALSE}\n")
+  cat(paste(tryCatch(readLines(file.path(itm[1], itm[2])), error=function(e) sprintf("Could not read source file named %s", file.path(itm[1], itm[2]))), sep="\n", collapse="\n"))
+  cat("\n```\n")
+}
+```
+<div id="accordion-stop"></div>
+<script type="text/javascript">
+```{r jqueryinclude, echo=FALSE, results='asis', warning=FALSE}
+cat(readLines(url("http://code.jquery.com/jquery-1.9.1.min.js")), sep="\n")
+```
+</script>
+<script type="text/javascript">
+```{r tablesorterinclude, echo=FALSE, results='asis', warning=FALSE}
+cat(readLines(url("http://tablesorter.com/__jquery.tablesorter.js")), sep="\n")
+```
+</script>
+<script type="text/javascript">
+```{r jqueryuiinclude, echo=FALSE, results='asis', warning=FALSE}
+cat(readLines(url("http://code.jquery.com/ui/1.10.2/jquery-ui.min.js")), sep="\n")
+```
+</script>
+<script type="text/javascript">
+```{r table2csvinclude, echo=FALSE, results='asis', warning=FALSE}
+cat(readLines(file.path(jspath, "table2csv.js")), sep="\n")
+```
+</script>
+<script type="text/javascript">
+  $(document).ready(function() {
+  $('tr').has('th').wrap('<thead></thead>');
+  $('table').each(function() { $('thead', this).prependTo(this); } );
+  $('table').addClass('tablesorter');$('table').tablesorter();});
+  //need to put this before the accordion stuff because the panels being hidden makes table2csv return null data
+  $('table.exportable').each(function() {$(this).after('<a download="' + $(this).attr('id') + '.csv" href="data:application/csv;charset=utf-8,'+encodeURIComponent($(this).table2CSV({delivery:'value'}))+'">Download '+$(this).attr('id')+'</a>')});
+  $('#accordion-start').nextUntil('#accordion-stop').wrapAll("<div id='accordion'></div>");
+  $('#accordion > h3').each(function() { $(this).nextUntil('h3').wrapAll("<div>"); });
+  $( '#accordion' ).accordion({ heightStyle: "content", collapsible: true, active: false });
+</script>

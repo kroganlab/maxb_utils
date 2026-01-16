@@ -37,13 +37,13 @@ LabelSigEffect <- function( results, apThreshold = 0.05, l2fcThreshold = 1 ) {
   }
   
   results[, Effect := "insig"]
-  results[is.na(log2FC), Effect := "missing"]
-  results[sign(log2FC) == 1 & Significant == T, Effect := "overrepresented"]
-  results[sign(log2FC) == -1 & Significant == T, Effect := "underrepresented"]
+  results[is.na(log2FC), Effect := "unidentified"]
+  results[sign(log2FC) == 1 & Significant == T, Effect := "up"]
+  results[sign(log2FC) == -1 & Significant == T, Effect := "down"]
   
   if (infBool){
-    results[log2FC == Inf & PositiveComplete == T, Effect := "exclusively"]
-    results[log2FC == -Inf & NegativeComplete == T, Effect := "absent"]
+    results[log2FC == Inf & PositiveComplete == T, Effect := "gained"]
+    results[log2FC == -Inf & NegativeComplete == T, Effect := "lost"]
   }
   
   return(results)
@@ -66,6 +66,54 @@ rowClusterWithNA <- function(mat, corr = FALSE, na.value = 0, ...){
     hclust(dst, method = "ward.D2", ...)
   }
 }
+
+
+### ENRICHMENT HELPER FXN
+library(clusterProfiler)
+library(pbapply)
+generateEnrichmentTable <- function(table, groupColumn = "Label", gmt = NULL, debug = F, proteinColumn = "Protein", returnSimplified = F){
+  
+  if (is.null(gmt)){
+    message("Loading GO gmt from local directory...")
+    gmt <- fread("~/Documents/Databases/GOgmt.tsv")
+  }
+  
+  tableLst <- split (table, by = groupColumn, flatten = TRUE, drop = TRUE)
+  
+  if (debug == T | Sys.info()['sysname'] == "Windows"){
+    message("debug == T . . . Running single-threaded for better error traceback. (debug mode is forced on Windows!)")
+    enrichLst <-pblapply( tableLst, function(subDT){
+      message(str(subDT))
+      setDT(as.data.frame(clusterProfiler::enricher(unique(unlist( subDT[,proteinColumn, with = F])),
+                                                    pAdjustMethod= "fdr",
+                                                    universe= as.character( unlist(table[, proteinColumn, with = F]) ), 
+                                                    TERM2GENE =  gmt,
+                                                    qvalueCutoff = 1.1,
+                                                    pvalueCutoff = 1.1)))})
+  } else {
+    nCores <- availCoresForParallel(leaveFree = 0.15)
+    message(nCores, " cores being used based on avail threads and avail memory")
+    #message(sum(gc()[,6]))
+    #message(sum(memory.profile()))
+    enrichLst <- pblapply( tableLst, function(subDT){
+      setDT(as.data.frame(clusterProfiler::enricher(unique(unlist(subDT[, proteinColumn, with = F] )),
+                                                    pAdjustMethod= "fdr",
+                                                    universe= as.character(  unlist(table[, proteinColumn, with = F])  ), 
+                                                    TERM2GENE =  gmt,
+                                                    qvalueCutoff = 1.1,
+                                                    pvalueCutoff = 1.1)))
+    }, cl = nCores )
+  }
+  enrichTable <-  rbindlist(enrichLst, idcol= groupColumn)
+  
+  if (returnSimplified == T){
+    return( simplifyEnrichBySimilarUniverseMembership.general(enrichResultsTable = enrichTable, gmt = gmt, groupColumn = groupColumn, pvalueColumn = "p.adjust", termColumn = "ID"))
+  } else {
+    return(enrichTable)
+  }
+}
+
+
 
 # Following functions are especially useful for network analyses, ie network propagation or shortest paths
 
@@ -248,7 +296,8 @@ cleanEvdc <- function(evidence, saveDir = NULL, keysRegex = NULL, controlRegex =
     # Save cleaned evidence file
     write.table(evidence_sub, paste0(prefix,"evidence_sub.txt"), sep = "\t", row.names = F, quote = F)
     # Make keys
-    keys <- unique(evidence[,.("Condition" = substrLeft(Experiment,start = 1, stop = -3), "BioReplicate" = Experiment), by = `Raw file`]) [, c("IsotopeLabelType", "Run") := .("L",1:nun(`Raw file`))]
+    keys <- unique(evidence[,.("Condition" = substrLeft(Experiment,start = 1, stop = -3),
+                               "BioReplicate" = Experiment), by = `Raw file`]) [, c("IsotopeLabelType", "Run") := .("L",1:nun(`Raw file`))]
     keys[, SAINT := "T"][grepl(controlRegex, Condition), SAINT := "C"]
     setnames(keys, "Raw file", "RawFile")
     #print(colnames(keys))
@@ -259,7 +308,7 @@ cleanEvdc <- function(evidence, saveDir = NULL, keysRegex = NULL, controlRegex =
       write.table(keys, paste0(prefix,"keys.txt"), sep = "\t", row.names = F, quote = F)
     } else {
       for (pattern in keysRegex){
-        write.table(keys[grepl(pattern,Condition),], paste0(prefix,"keys_", pattern,".txt"), sep = "\t", row.names = F, quote = F)
+        write.table(keys[ grepl(pattern,Condition),], paste0(prefix,"keys", pattern,".txt"), sep = "\t", row.names = F, quote = F)
       }
     } 
     setwd(tmp)
@@ -270,7 +319,7 @@ cleanEvdc <- function(evidence, saveDir = NULL, keysRegex = NULL, controlRegex =
 
 # write input files for saint 
 prepSaintInputFromEvdc <- function(evidencefile, keysfile, fastafile, msDataType="spc", prefix=""){
-  artmsEvidenceToSaintExpress(evidence_file=evidencefile,
+  artMS::artmsEvidenceToSaintExpress(evidence_file=evidencefile,
                               keys_file=keysfile,
                               ref_proteome_file=fastafile,
                               quant_variable= paste0("ms",msDataType), output_file=paste0(prefix, msDataType, ".txt"), verbose = TRUE)
@@ -284,7 +333,7 @@ callSAINTexpress <- function(baitfile = "saint-baits.txt", preyfile = "saint-pre
   preyfile <- paste(prefix, msDataType, preyfile, sep = "-")
   baitfile <- paste(prefix, msDataType, baitfile, sep = "-")
   
-  saintProgram <- paste0("SAINTexpress-", msDataType,"deprecated")
+  saintProgram <- paste0("SAINTexpress-", msDataType,"-deprecated")
   command <- paste(saintProgram, interactionfile, preyfile, baitfile)
   system(command)
   system(paste("mv list.txt", fileName))
@@ -386,5 +435,45 @@ neighborhoodFromString <- function (genes,
   
   neighbors <- unique(neighborGenes[, .(gene1, gene2)]) #unique(neighborGenes[gene1 < gene2, .(gene1, gene2)])
   return (neighbors)
+}
+
+
+simplifyProteinGroupsToMap <- function( proteinGroups, fasta = "~/Documents/Databases/UP000005640_9606.fasta.gz", threadCount = 1, stripIsoforms = T){
+  fastaList <- seqinr::read.fasta(fasta, seqtype = "AA", as.string = T)
+  allOfficialNames <- lapply(fastaList,FUN = function(fastaProtein){strsplit( attr(fastaProtein, "name" ), split = "\\|")[[1]][2]}) |> unlist()
+  aoGeneSymbols <- lapply(fastaList,FUN = function(fastaProtein){strsplit( attr(fastaProtein, "name" ), split = "\\||_")[[1]][3]}) |> unlist()
+  officialGeneSymbolMap <- data.table( "uniprot" = allOfficialNames, "fastaSymbol" = aoGeneSymbols)
+  
+  tmp <- pblapply(X = unique(proteinGroups), FUN = function( group, officialNames){
+    if (stripIsoforms == T){
+      group <- gsub( "-[0-9]+", "", group[1] )
+    }
+    indvNames <- strsplit( group, split = ";")[[1]]
+    indvNamesBool <- indvNames %in% officialNames
+    if ( sum(indvNamesBool) == 1){
+      singleUniprot <- indvNames[indvNamesBool]
+      mappingType <- "single"
+    } else if (sum(indvNamesBool) > 1){
+      singleUniprot <- indvNames[indvNamesBool][1]
+      mappingType <- "multi"
+    } else if (sum(indvNamesBool) == 0){
+      singleUniprot <- indvNames[1]
+      mappingType <- "notInFasta"
+    }
+    return(c(singleUniprot, mappingType))
+  }, officialNames = allOfficialNames, cl = threadCount)
+  
+  singleUniprot <- sapply(tmp, "[", 1) |> as.character()
+  mappingType <- sapply(tmp, "[", 2) |> as.character()
+  
+  map <- data.table( "proteinGroups" = unique(proteinGroups),
+                     "singleProtein" = singleUniprot,
+                     "mappingType" = mappingType,
+                     "singleGene" = translateUniprot2GeneName(singleUniprot))
+  map[officialGeneSymbolMap, c("singleSymbol") := .(i.fastaSymbol), on = .(singleProtein = uniprot) ]
+  map[is.na(singleGene), singleGene := singleProtein]
+  map[is.na(singleSymbol), singleSymbol := singleGene]
+  
+ return(map) 
 }
 
