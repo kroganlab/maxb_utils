@@ -196,5 +196,5 @@ log_source <- function(sourceRequested, logFileName = "00_sourced_Rcode_log.tsv"
   data.table::fwrite(x = sourceInfo, file = get_source_log_file(logFileName = logFileName), append = T, sep = "\t")
 
   # finalllyyyy source it!
-  source(sourceFile)
+  base::source(sourceFile)  #explicitly call base version; avoids circular sourcing if you alias this: `source <- log_source`
 }
