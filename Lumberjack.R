@@ -182,7 +182,7 @@ log_source <- function(sourceRequested, logFileName = "00_sourced_Rcode_log.tsv"
   # write new sourced code
   if (codeChanged) {
     file.copy(from = sourceFile, to = loggedCodePath)
-    warning("Sourced code content is changed from previous logged source")
+    if (!is.null(recentSource)) warning("Sourced code content is changed from previous logged source")
     message(sprintf("New code source logged to %s", loggedCodePath))
   } else {
     loggedCodePath <- sprintf("Content unchanged, see previous logged %s", basename(sourceRequested) )
