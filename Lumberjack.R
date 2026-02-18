@@ -29,10 +29,10 @@ moment <- function(){
   format(Sys.time(), "%y.%m.%d--%H.%M.%S")
 }
 
-ScriptName <- function(scriptName = NULL){
+ScriptName <- function(scriptName = NULL, allowFail = FALSE){
   if(is.null(scriptName))
     scriptName <- rstudioapi::getActiveDocumentContext()$path
-  if (is.null (scriptName) || scriptName == "")
+  if ( (is.null (scriptName) || scriptName == "") & !allowFail)
     stop("No script name found -- you may need to save this file first")
   else 
     return(scriptName)
@@ -145,6 +145,13 @@ check_if_gitRemote_upToDate <- function(filepath = "."){
 ###
 
 log_source <- function(sourceRequested, logFileName = "00_sourced_Rcode_log.tsv"){
+  
+  if (sourceRequested == ScriptName(allowFail = TRUE)){
+    message ("Using base source (no logging) when sourced directly from file (or gui button)")
+    base::source(sourceRequested)
+    return()
+  }
+  
   message(sprintf("Sourcing and Logging R Script:   %s   ", basename(sourceRequested)))
   sourceFile <- copy(sourceRequested)
   recentSource <- NULL
@@ -198,3 +205,19 @@ log_source <- function(sourceRequested, logFileName = "00_sourced_Rcode_log.tsv"
   # finalllyyyy source it!
   base::source(sourceFile)  #explicitly call base version; avoids circular sourcing if you alias this: `source <- log_source`
 }
+
+# a wrapper of the above.  In case of failure, print error, but then proceed with base::source
+
+log_source_trycatch <- function (sourceRequested, ...){
+  tryCatch ( .log_source (sourceRequested, ...),
+             error = function (e){
+               warning ( "Failed while attempting to log source with message: \n",
+                         "\tError Ignored <::> ", e, "\n",
+                         "Will use base::source with no logging\n")
+               base::source (sourceRequested)
+             })
+}
+
+# rename to use trycatch wrapper...
+.log_source <- log_source
+log_source <- log_source_trycatch
